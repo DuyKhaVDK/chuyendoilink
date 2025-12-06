@@ -6,24 +6,38 @@ function cleanUrlLogic(fullUrl) {
         const urlObj = new URL(fullUrl);
         const path = urlObj.pathname; // Lấy phần đường dẫn
 
-        // --- NHÓM 1: CÁC DẠNG CẦN LẤY LINK GỐC SẠCH (Xóa hết tham số ?...) ---
+        // --- NHÓM 1: CÁC DẠNG CẦN LẤY LINK GỐC SẠCH & BIẾN ĐỔI ---
 
-        // 1. Link sự kiện (bắt đầu bằng /m/)
-        const isEventPage = path.startsWith('/m/');
-
-        // 2. Link sản phẩm chuẩn (/product/...)
-        const isProductPage = path.startsWith('/product/');
-
-        // 3. Link Shop (Chỉ có 1 cấp: /ten-shop)
-        const isShopPage = /^\/[^\/]+$/.test(path) && !path.startsWith('/search') && !path.startsWith('/cart');
-
-        // 4. [BỔ SUNG] Link sản phẩm dạng: /Tên-Shop/ShopID/ProductID
+        // 1. [MỚI] Link dạng: /Tên-Shop/ShopID/ProductID
         // Ví dụ: /opaanlp/267075185/9253405547
-        // Regex giải thích: Bắt đầu bằng / -> Chữ bất kỳ -> / -> Số -> / -> Số
-        const isUniversalLink = /^\/[^\/]+\/\d+\/\d+$/.test(path);
+        // Logic: Bắt lấy ShopID và ProductID, sau đó ép về dạng /product/...
+        // Regex giải thích: 
+        // ^\/([^\/]+) -> Bắt nhóm 1: Tên Shop (opaanlp)
+        // \/(\d+)     -> Bắt nhóm 2: Shop ID (267075185)
+        // \/(\d+)$    -> Bắt nhóm 3: Product ID (9253405547)
+        const universalMatch = path.match(/^\/([^\/]+)\/(\d+)\/(\d+)$/);
+        
+        if (universalMatch) {
+            const shopId = universalMatch[2];     // Lấy Shop ID
+            const productId = universalMatch[3];  // Lấy Product ID
+            // Trả về link chuẩn hóa: https://shopee.vn/product/ShopID/ProductID
+            return `${urlObj.origin}/product/${shopId}/${productId}`;
+        }
 
-        // NẾU THUỘC 1 TRONG 4 DẠNG TRÊN -> XÓA SẠCH THAM SỐ
-        if (isEventPage || isProductPage || isShopPage || isUniversalLink) {
+        // 2. Link sự kiện (bắt đầu bằng /m/) -> Giữ nguyên, bỏ tham số
+        if (path.startsWith('/m/')) {
+            return urlObj.origin + path;
+        }
+
+        // 3. Link sản phẩm chuẩn cũ (/product/) -> Giữ nguyên, bỏ tham số
+        // (Trường hợp này thực ra Regex ở mục 1 đã bao phủ, nhưng để riêng cho chắc chắn)
+        if (path.startsWith('/product/')) {
+            return urlObj.origin + path;
+        }
+
+        // 4. Link Shop (Chỉ có 1 cấp: /ten-shop) -> Giữ nguyên, bỏ tham số
+        const isShopPage = /^\/[^\/]+$/.test(path) && !path.startsWith('/search') && !path.startsWith('/cart');
+        if (isShopPage) {
             return urlObj.origin + path; 
         }
 
@@ -43,7 +57,6 @@ function cleanUrlLogic(fullUrl) {
 
 // Hàm gọi request lấy link (không đổi)
 async function convertOneLink(url) {
-    // Chỉ xử lý link shopee
     if (!url.includes('shopee') && !url.includes('shp.ee')) return url;
 
     try {
@@ -58,7 +71,7 @@ async function convertOneLink(url) {
     }
 }
 
-// === HANDLER CỦA NETLIFY ===
+// === HANDLER CỦA NETLIFY (không đổi) ===
 exports.handler = async function(event, context) {
     if (event.httpMethod !== "POST") {
         return { statusCode: 405, body: "Method Not Allowed" };
